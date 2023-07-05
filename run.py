@@ -166,14 +166,14 @@ def video_synchronization_setup():
     url = "https://iiitaphyd-my.sharepoint.com/personal/radrabha_m_research_iiit_ac_in/_layouts/15/download.aspx?share=EdjI7bZlgApMqsVoEUUXpLsBxqXbn5z8VTmoxp55YNDcIA"
     response = requests.get(url)
     
-    with open("Wav2Lip/checkpoints/wav2lip_gan.pth", "wb") as f:
+    with open("wav2lip/checkpoints/wav2lip_gan.pth", "wb") as f:
         f.write(response.content)
     
     # Download pretrained model for face detection
     url = "https://www.adrianbulat.com/downloads/python-fan/s3fd-619a316812.pth"
     response = requests.get(url)
     
-    with open("Wav2Lip/face_detection/detection/sfd/s3fd.pth", "wb") as f:
+    with open("wav2lip/face_detection/detection/sfd/s3fd.pth", "wb") as f:
         f.write(response.content)
 
 def sync_video(input_video_file, input_audio_file, output_video_file):
@@ -187,13 +187,12 @@ def sync_video(input_video_file, input_audio_file, output_video_file):
     nosmooth = False
     
     # Set the path to the Wav2Lip model and input files
-    checkpoint_path = "Wav2Lip/checkpoints/wav2lip_gan.pth"
+    checkpoint_path = "wav2lip/checkpoints/wav2lip_gan.pth"
 
     ### TODO: переписать вызов через внутреннее API
     # Run the Wav2Lip model
-    cmd = f"python3 Wav2Lip/inference.py --checkpoint_path {checkpoint_path} --face {input_video_file} --audio temp/voice_sync.wav --pads {pad_top} {pad_bottom} {pad_left} {pad_right} --resize_factor {rescaleFactor} {'--nosmooth' if nosmooth else ''} --outfile {output_video_file}"
+    cmd = f"python3 wav2lip/inference.py --checkpoint_path {checkpoint_path} --face {input_video_file} --audio temp/voice_sync.wav --pads {pad_top} {pad_bottom} {pad_left} {pad_right} --resize_factor {rescaleFactor} {'--nosmooth' if nosmooth else ''} --outfile {output_video_file}"
     subprocess.run(cmd.split())
-    #subprocess.run(["python", "Wav2Lip/inference.py", "--checkpoint_path", str(checkpoint_path), "--face", str("../" + input_video_file), "--audio", str("../" + input_audio_file), "--pads", str(pad_top), str(pad_bottom), str(pad_left), str(pad_right), "--resize_factor", str(rescaleFactor), str("--nosmooth" if nosmooth else ""), "--outfile", str("../" + output_video_file)])
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -206,7 +205,6 @@ if __name__ == "__main__":
     ### TODO: добавить аргумент verbose и выводить логи поэтапно
     cmd = f"ffmpeg -y -i {args.input_file} temp/input_audio.wav"
     subprocess.run(cmd.split())
-    #subprocess.run(["ffmpeg", "-y", "-i", str(args.input_file), "temp/input_audio.wav"])
 
     ### TODO: пройтись по записи и проанализировать качество аудио и количество голосов/роли
     ### определить правильность выбранного голоса (голос для клонирования должен быть один и достаточно чистый)

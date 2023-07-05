@@ -24,8 +24,8 @@ RUN pip install boto3 encodec funcy tokenizers torch tqdm transformers numpy sci
 
 # Wav2Lip
 RUN pip install opencv-python-headless librosa
-#RUN wget -O Wav2Lip/checkpoints/wav2lip_gan.pth "https://iiitaphyd-my.sharepoint.com/personal/radrabha_m_research_iiit_ac_in/_layouts/15/download.aspx?share=EdjI7bZlgApM>
-RUN wget -O Wav2Lip/face_detection/detection/sfd/s3fd.pth "https://www.adrianbulat.com/downloads/python-fan/s3fd-619a316812.pth"
+#RUN wget -O wav2lip/checkpoints/wav2lip_gan.pth "https://iiitaphyd-my.sharepoint.com/personal/radrabha_m_research_iiit_ac_in/_layouts/15/download.aspx?share=EdjI7bZlgApM>
+RUN wget -O wav2lip/face_detection/detection/sfd/s3fd.pth "https://www.adrianbulat.com/downloads/python-fan/s3fd-619a316812.pth"
 
 RUN pip install deepfilternet
 RUN pip install openai-whisper sacremoses fastBPE
