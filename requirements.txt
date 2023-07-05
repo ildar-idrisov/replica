@@ -1,0 +1,17 @@
+boto3
+encodec
+funcy
+tokenizers
+torch
+tqdm
+transformers
+numpy
+scipy
+fairseq
+audiolm-pytorch
+opencv-python-headless
+librosa
+deepfilternet
+openai-whisper
+sacremoses
+fastBPE
