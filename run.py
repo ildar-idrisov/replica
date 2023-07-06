@@ -55,11 +55,11 @@ def voice_clonning_download_hubert(lang):
 
 ### TODO: change data/models/hubert/ to models/hubert/ here and in bark-with-voice-clone/hubert/hubert_manager.py
 def voice_clonning_setup_hubert(device):
-    hubert_model = CustomHubert(checkpoint_path="data/models/hubert/hubert.pt").to(device)
+    hubert_model = CustomHubert(checkpoint_path="models/hubert/hubert.pt").to(device)
     return hubert_model
 
 def voice_clonning_setup_tokenizer(device, tokenizer_file):
-    tokenizer = CustomTokenizer.load_from_checkpoint("data/models/hubert/" + tokenizer_file).to(device)
+    tokenizer = CustomTokenizer.load_from_checkpoint("models/hubert/" + tokenizer_file).to(device)
     return tokenizer
 
 def voice_cleaning_setup():
