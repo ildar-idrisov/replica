@@ -19,7 +19,6 @@ RUN pip install --upgrade pip
 WORKDIR /app
 ADD . /app
 
-# Bark
 #RUN pip install -r requirements.txt #problem with installation order of fastBPE
 RUN cat requirements.txt | xargs -n 1 -L 1 pip install
 #RUN wget -O wav2lip/checkpoints/wav2lip_gan.pth "https://iiitaphyd-my.sharepoint.com/personal/radrabha_m_research_iiit_ac_in/_layouts/15/download.aspx?share=EdjI7bZlgApM>
