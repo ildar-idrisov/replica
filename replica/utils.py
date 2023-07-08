@@ -1,8 +1,16 @@
+# https://github.com/serp-ai/bark-with-voice-clone
+# https://github.com/Datasciensyash/ResemblyzerSlim.git
+# https://github.com/justinjohn0306/Wav2Lip
+
 import numpy as np
 import torch
 import requests
 import subprocess
 import os
+import sys
+#sys.path.insert(0, "Wav2Lip") ### TODO: move to Dockerfile
+sys.path.insert(0, "bark-with-voice-clone") ### TODO: move to Dockerfile"
+sys.path.insert(0, "ResemblyzerSlim") ### TODO: move to Dockerfile
 # voice clonning
 from bark.generation import load_codec_model, SAMPLE_RATE
 from hubert.hubert_manager import HuBERTManager
@@ -17,10 +25,14 @@ from bark.generation import preload_models, codec_decode, generate_coarse, gener
 from df.enhance import enhance, init_df, load_audio, save_audio
 # automatic speach recognition
 import whisper
+# voice similaruity
+from resemblyzer import VoiceEncoder, preprocess_wav
+from pathlib import Path
 # wirking with audio
 import torchaudio
 import soundfile as sf
 import librosa
+from scipy.io.wavfile import write as write_wav
 
 def voice_clonning_setup_bark(device):
     codec_model = load_codec_model(use_gpu=True if device == "cuda" else False)
@@ -43,16 +55,20 @@ def voice_clonning_download_hubert(lang):
 
 ### TODO: change data/models/hubert/ to models/hubert/ here and in bark-with-voice-clone/hubert/hubert_manager.py
 def voice_clonning_setup_hubert(device):
-    hubert_model = CustomHubert(checkpoint_path="data/models/hubert/hubert.pt").to(device)
+    hubert_model = CustomHubert(checkpoint_path="models/hubert/hubert.pt").to(device)
     return hubert_model
 
 def voice_clonning_setup_tokenizer(device, tokenizer_file):
-    tokenizer = CustomTokenizer.load_from_checkpoint("data/models/hubert/" + tokenizer_file).to(device)
+    tokenizer = CustomTokenizer.load_from_checkpoint("models/hubert/" + tokenizer_file).to(device)
     return tokenizer
 
 def voice_cleaning_setup():
     df_model, df_state, _ = init_df()
     return df_model, df_state
+
+def resemblyzer_setup():
+    resemblyzer_encoder = VoiceEncoder()
+    return resemblyzer_encoder
 
 ### TODO: убрать запись в файл
 def clean_audio(df_model, df_state, audio_noise_wav_file, audio_clean_wav_file):
@@ -63,7 +79,7 @@ def clean_audio(df_model, df_state, audio_noise_wav_file, audio_clean_wav_file):
 ### TODO: посмотреть необходимость torchaudio, файл уже wav
 ### TODO: передавать аудио файл в виде буфера
 ### TODO: сохранять клонированный голос в спец. папке
-def clone_voice(hubert_model, tokenizer, codec_model, voice_to_clone_file, voice_fingerprint_file): # the audio you want to clone (under 13 seconds)
+def clone_voice(device, hubert_model, tokenizer, codec_model, voice_to_clone_file, voice_fingerprint_file): # the audio you want to clone (under 13 seconds)
     # Load and pre-process the audio waveform
     wav, sr = torchaudio.load(voice_to_clone_file)
     wav = convert_audio(wav, sr, codec_model.sample_rate, codec_model.channels)
@@ -150,6 +166,33 @@ def synthesize_voice(text_prompt, voice_name, mode = "simple"):
         audio_array = codec_decode(x_fine_gen)
     return audio_array
 
+def synthesize_voice_find_best(text_translated, voice_name, resemblyzer_encoder, mode, original_voice):
+    fpath = Path(original_voice)
+    wav = preprocess_wav(fpath)
+    embeds_a = resemblyzer_encoder.embed_utterance(wav)
+    np.set_printoptions(precision=3, suppress=True)
+    
+    samples = []
+    for i in range(20):
+        audio_array = synthesize_voice(text_translated, voice_name, "simple")
+        write_wav(f"temp/voice_synt_noise_{i}.wav", SAMPLE_RATE, audio_array)
+        
+        fpath = Path(f"temp/voice_synt_noise_{i}.wav")
+        wav = preprocess_wav(fpath)
+        embeds_b = resemblyzer_encoder.embed_utterance(wav)
+        np.set_printoptions(precision=3, suppress=True)
+    
+        sim = np.inner(embeds_a, embeds_b)
+        ### TODO: перевести сгенеренное аудио в текст и сравнить похожесть с оригинальным текстом text_translated, добавить как часть проверки. если фраза присутствует, то вырезать ненужное в начале и в конце
+        samples.append((i, sim, f"temp/voice_synt_noise_{i}.wav"))
+        print(i, sim)
+        if (sim > 0.9):
+            break
+    sample = max(samples, key=lambda item: item[1])
+    print(sample)
+    best_speech_file = sample[2]
+    return best_speech_file
+
 def video_synchronization_setup():
     url = "https://iiitaphyd-my.sharepoint.com/personal/radrabha_m_research_iiit_ac_in/_layouts/15/download.aspx?share=EdjI7bZlgApMqsVoEUUXpLsBxqXbn5z8VTmoxp55YNDcIA"
     response = requests.get(url)
@@ -165,8 +208,8 @@ def video_synchronization_setup():
         f.write(response.content)
 
 def sync_video(input_video_file, input_audio_file, output_video_file):
-    audio, sr = librosa.load(input_audio_file, sr=None)
-    sf.write("temp/voice_sync.wav", audio, sr, format="wav")
+    audio, sr = librosa.load(input_audio_file, sr=None)      ### TODO: можно удалить
+    sf.write("temp/voice_sync.wav", audio, sr, format="wav") ### TODO: можно удалить
     pad_top = 0
     pad_bottom = 10
     pad_left = 0
