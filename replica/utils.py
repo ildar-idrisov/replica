@@ -166,14 +166,14 @@ def synthesize_voice(text_prompt, voice_name, mode = "simple"):
         audio_array = codec_decode(x_fine_gen)
     return audio_array
 
-def synthesize_voice_find_best(text_translated, voice_name, resemblyzer_encoder, mode, original_voice):
+def synthesize_voice_find_best(text_translated, voice_name, resemblyzer_encoder, mode, original_voice, search_iter = 10):
     fpath = Path(original_voice)
     wav = preprocess_wav(fpath)
     embeds_a = resemblyzer_encoder.embed_utterance(wav)
     np.set_printoptions(precision=3, suppress=True)
     
     samples = []
-    for i in range(20):
+    for i in range(search_iter):
         audio_array = synthesize_voice(text_translated, voice_name, "simple")
         write_wav(f"temp/voice_synt_noise_{i}.wav", SAMPLE_RATE, audio_array)
         
@@ -197,14 +197,16 @@ def video_synchronization_setup():
     url = "https://iiitaphyd-my.sharepoint.com/personal/radrabha_m_research_iiit_ac_in/_layouts/15/download.aspx?share=EdjI7bZlgApMqsVoEUUXpLsBxqXbn5z8VTmoxp55YNDcIA"
     response = requests.get(url)
     
-    with open("wav2lip/checkpoints/wav2lip_gan.pth", "wb") as f:
+    with open("models/wav2lip_gan.pth", "wb") as f:
         f.write(response.content)
     
     # Download pretrained model for face detection
     url = "https://www.adrianbulat.com/downloads/python-fan/s3fd-619a316812.pth"
     response = requests.get(url)
     
-    with open("wav2lip/face_detection/detection/sfd/s3fd.pth", "wb") as f:
+    if not os.path.exists("models/face_detection"):
+        os.makedirs("models/face_detection")
+    with open("models/face_detection/s3fd.pth", "wb") as f:
         f.write(response.content)
 
 def sync_video(input_video_file, input_audio_file, output_video_file):
@@ -218,7 +220,7 @@ def sync_video(input_video_file, input_audio_file, output_video_file):
     nosmooth = False
     
     # Set the path to the Wav2Lip model and input files
-    checkpoint_path = "wav2lip/checkpoints/wav2lip_gan.pth"
+    checkpoint_path = "models/wav2lip_gan.pth"
 
     ### TODO: переписать вызов через внутреннее API
     # Run the Wav2Lip model

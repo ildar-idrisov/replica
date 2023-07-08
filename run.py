@@ -1,5 +1,5 @@
 #
-# python run.py --input_file shared/orlov.mp4 --output_file res.mp4
+# python run.py --input_file shared/orlov.mp4 --output_file temp/res.mp4
 #
 
 import sys
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     
     replica.voice_synthesis_setup()
     resemblyzer_encoder = replica.resemblyzer_setup()
-    best_speech_file = replica.synthesize_voice_find_best(text_translated, "temp/voice_clone.npz", resemblyzer_encoder, "simple", "temp/clean_audio.wav")
+    best_speech_file = replica.synthesize_voice_find_best(text_translated, "temp/voice_clone.npz", resemblyzer_encoder, "simple", "temp/clean_audio.wav", 10)
 
     ### TODO: разобраться с этой файловой херью
     noisy_audio, _ = load_audio(best_speech_file, sr=df_state.sr())
