@@ -12,7 +12,8 @@ audiolm-pytorch
 opencv-python-headless
 librosa
 deepfilternet
-simphile
 openai-whisper
 sacremoses
 fastBPE
+simphile
+statistics

@@ -30,6 +30,7 @@ from resemblyzer import VoiceEncoder, preprocess_wav
 from pathlib import Path
 # text similaruity
 from simphile import jaccard_similarity, euclidian_similarity, compression_similarity
+import statistics
 # wirking with audio
 import torchaudio
 import soundfile as sf
@@ -82,14 +83,14 @@ def clean_audio(df_model, df_state, audio_noise_wav_file, audio_clean_wav_file):
 ### TODO: посмотреть необходимость torchaudio, файл уже wav
 ### TODO: передавать аудио файл в виде буфера
 ### TODO: сохранять клонированный голос в спец. папке
-def clone_voice(device, hubert_model, tokenizer, codec_model, voice_to_clone_file, voice_fingerprint_file): # the audio you want to clone (under 13 seconds)
+def clone_voice(device, hubert_model, tokenizer_model, codec_model, voice_to_clone_file, voice_fingerprint_file): # the audio you want to clone (under 13 seconds)
     # Load and pre-process the audio waveform
     wav, sr = torchaudio.load(voice_to_clone_file)
     wav = convert_audio(wav, sr, codec_model.sample_rate, codec_model.channels)
     wav = wav.to(device)
     
     semantic_vectors = hubert_model.forward(wav, input_sample_hz=codec_model.sample_rate)
-    semantic_tokens = tokenizer.get_token(semantic_vectors)
+    semantic_tokens = tokenizer_model.get_token(semantic_vectors)
     
     # Extract discrete codes from EnCodec
     with torch.no_grad():
@@ -102,6 +103,46 @@ def clone_voice(device, hubert_model, tokenizer, codec_model, voice_to_clone_fil
     semantic_tokens = semantic_tokens.cpu().numpy()
     
     np.savez(voice_fingerprint_file, fine_prompt=codes, coarse_prompt=codes[:2, :], semantic_prompt=semantic_tokens)
+
+def clone_voice_find_best(device, hubert_model, tokenizer_model, codec_model, input_file, resemblyzer_encoder, mode):
+    audio_duration = librosa.get_duration(filename=input_file)
+    text = "Hello my friend. This is the Replica test"
+    clone_scores = []
+    for i in range(int(audio_duration // 10)):
+        ### TODO: если конец аудио файла, то break
+        cmd = f"ffmpeg -y -i {input_file} -ss {i*10} -t {i*10+10} temp/input_audio_{i}.wav"
+        subprocess.run(cmd.split())
+        ### TODO: удалить паузы
+        clone_voice(device, hubert_model, tokenizer_model, codec_model, f"temp/input_audio_{i}.wav", f"temp/voice_clone_{i}.npz")
+        
+        fpath = Path(f"temp/input_audio_{i}.wav")
+        wav = preprocess_wav(fpath)
+        embeds_a = resemblyzer_encoder.embed_utterance(wav)
+        np.set_printoptions(precision=3, suppress=True)
+    
+        voice_synt_file = "temp/voice_synt_noise.wav"
+        sim_audio_lst = []
+        for j in range(10):
+            
+            audio_array = synthesize_voice(text, f"temp/voice_clone_{i}.npz", mode)
+            write_wav(voice_synt_file, SAMPLE_RATE, audio_array)
+    
+            fpath = Path(voice_synt_file)
+            wav = preprocess_wav(fpath)
+            embeds_b = resemblyzer_encoder.embed_utterance(wav)
+            np.set_printoptions(precision=3, suppress=True)
+            sim_audio = np.inner(embeds_a, embeds_b)
+            
+            sim_audio_lst.append(sim_audio)
+            print(j, "sim_audio:", sim_audio)
+
+        clone_score = statistics.median(sim_audio_lst)
+        clone_scores.append((i, clone_score, f"temp/voice_clone_{i}.npz"))
+
+    clone_score = sorted(clone_scores, reverse=True, key=lambda item: item[1])[0] ### TODO: sorted()[1] для исключения выбросов
+    print("best voice:", clone_score)
+    clone_score_file = clone_score[2]
+    return clone_score_file
 
 def transcribe_audio_setup(whisper_size = "small"):
     whisper_model = whisper.load_model(whisper_size)
@@ -190,8 +231,8 @@ def synthesize_voice_list(text, voice_name, resemblyzer_encoder, mode, original_
         print(i, sim)
         #if (sim > 0.9):
         #    break
-    samples = sorted(samples, reverse=True, key=lambda item: item[1])
     samples = list(filter(lambda item: item[1] > 0.75, samples))
+    samples = sorted(samples, reverse=True, key=lambda item: item[1])
     print(samples)
     return samples
 
@@ -199,7 +240,7 @@ def compare_text(text_a, text_b):
     print(text_a)
     print(text_b)
     print(f"Jaccard Similarity: {jaccard_similarity(text_a, text_b)}")
-    print(f"Euclidian Similarity: {euclidian_similarity(text_a, text_b)}")
+    #print(f"Euclidian Similarity: {euclidian_similarity(text_a, text_b)}")
     print(f"Compression Similarity: {compression_similarity(text_a, text_b)}")
     
     return jaccard_similarity(text_a, text_b)
@@ -217,6 +258,39 @@ def find_best_sample(original_text, text_samples, whisper_model):
     else:
         best_speech_file = text_samples[0][2]
     return best_speech_file
+
+def synthesize_voice_find_best(text, voice_name, resemblyzer_encoder, whisper_model, mode, original_voice, search_iter = 30):
+    fpath = Path(original_voice)
+    wav = preprocess_wav(fpath)
+    embeds_a = resemblyzer_encoder.embed_utterance(wav)
+    np.set_printoptions(precision=3, suppress=True)
+
+    voice_synts = []
+    for i in range(search_iter):
+        audio_array = synthesize_voice(text, voice_name, mode)
+        write_wav(f"temp/voice_synt_noise_{i}.wav", SAMPLE_RATE, audio_array)
+
+        fpath = Path(f"temp/voice_synt_noise_{i}.wav")
+        wav = preprocess_wav(fpath)
+        embeds_b = resemblyzer_encoder.embed_utterance(wav)
+        np.set_printoptions(precision=3, suppress=True)
+        sim_audio = np.inner(embeds_a, embeds_b)
+
+        text_transcribed = transcribe_audio(whisper_model, f"temp/voice_synt_noise_{i}.wav")
+        sim_text = compare_text(text, text_transcribed)
+        print(i, sim_audio, sim_text)
+
+        voice_synts.append((i, sim_audio, sim_text, f"temp/voice_synt_noise_{i}.wav"))
+        if (sim_audio > 0.70 and sim_text > 0.72):
+            break
+
+    print(voice_synts)
+    voice_synts = sorted(voice_synts, reverse=True, key=lambda item: item[1])[:10]
+    print(voice_synts)
+    voice_synts = sorted(voice_synts, reverse=True, key=lambda item: item[2])[0]
+    print(voice_synts)
+    voice_synt_file = voice_synts[3]
+    return voice_synt_file
 
 def video_synchronization_setup():
     url = "https://iiitaphyd-my.sharepoint.com/personal/radrabha_m_research_iiit_ac_in/_layouts/15/download.aspx?share=EdjI7bZlgApMqsVoEUUXpLsBxqXbn5z8VTmoxp55YNDcIA"
