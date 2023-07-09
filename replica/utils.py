@@ -110,7 +110,7 @@ def clone_voice_find_best(device, hubert_model, tokenizer_model, codec_model, in
     clone_scores = []
     for i in range(int(audio_duration // 10)):
         ### TODO: если конец аудио файла, то break
-        cmd = f"ffmpeg -y -i {input_file} -ss {i*10} -t {i*10+10} temp/input_audio_{i}.wav"
+        cmd = f"ffmpeg -y -i {input_file} -ss {i*10} -t {10} temp/input_audio_{i}.wav"
         subprocess.run(cmd.split())
         ### TODO: удалить паузы
         clone_voice(device, hubert_model, tokenizer_model, codec_model, f"temp/input_audio_{i}.wav", f"temp/voice_clone_{i}.npz")
@@ -249,7 +249,7 @@ def find_best_sample(original_text, text_samples, whisper_model):
     best_speech_sample = None
     for sample in text_samples:
         text_transcribed = transcribe_audio(whisper_model, sample[2])
-        if (compare_text(original_text, text_transcribed) > 0.72): ### TODO: написать алгоритм сравнения получшее
+        if (compare_text(original_text, text_transcribed) > 0.72):
             best_speech_sample = sample
             break
     ### TODO: перевести сгенеренное аудио в текст, если фраза присутствует, то вырезать ненужное в начале и в конце

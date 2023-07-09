@@ -22,13 +22,13 @@ if __name__ == "__main__":
     parser.add_argument("--output_file", type=str, default="temp/res.mp4")
     args = parser.parse_args()
     
-    device = "cuda" # or "cpu"
+    device = "cuda" # "cuda" or "cpu"
 
     # Clone
     
     ### TODO: добавить аргумент verbose и выводить логи поэтапно
     ### TODO: найти более подходящий отрывок голоса
-    cmd = f"ffmpeg -y -i {args.input_file} -ss 0 -t 50 temp/input_audio.wav"
+    cmd = f"ffmpeg -y -i {args.input_file} -ss 200 -t 50 temp/input_audio.wav"
     subprocess.run(cmd.split())
 
     ### TODO: пройтись по записи и проанализировать качество аудио и количество голосов/роли
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     whisper_model = replica.transcribe_audio_setup("small.en")
     #speech_list = replica.synthesize_voice_list(text_translated, "temp/voice_clone.npz", resemblyzer_encoder, "simple", "temp/clean_audio.wav", 10)
     #best_speech_file = replica.find_best_sample(text_translated, speech_list, whisper_model)
-    best_speech_file = replica.synthesize_voice_find_best(text_translated, voice_clone_file, resemblyzer_encoder, whisper_model, "simple", "temp/clean_audio.wav", 30)
+    best_speech_file = replica.synthesize_voice_find_best(text_translated, voice_clone_file, resemblyzer_encoder, whisper_model, "simple", "temp/clean_audio.wav", 20)
     del whisper_model, resemblyzer_encoder
 
     replica.clean_audio(df_model, df_state, best_speech_file, "temp/voice_synt.wav")
