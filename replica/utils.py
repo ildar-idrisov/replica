@@ -28,6 +28,8 @@ import whisper
 # voice similaruity
 from resemblyzer import VoiceEncoder, preprocess_wav
 from pathlib import Path
+# text similaruity
+from simphile import jaccard_similarity, euclidian_similarity, compression_similarity
 # wirking with audio
 import torchaudio
 import soundfile as sf
@@ -71,6 +73,7 @@ def resemblyzer_setup():
     return resemblyzer_encoder
 
 ### TODO: убрать запись в файл
+### TODO: разобраться с этой файловой херью
 def clean_audio(df_model, df_state, audio_noise_wav_file, audio_clean_wav_file):
     noisy_audio, _ = load_audio(audio_noise_wav_file, sr=df_state.sr())
     audio = enhance(df_model, df_state, noisy_audio)
@@ -166,7 +169,7 @@ def synthesize_voice(text_prompt, voice_name, mode = "simple"):
         audio_array = codec_decode(x_fine_gen)
     return audio_array
 
-def synthesize_voice_find_best(text_translated, voice_name, resemblyzer_encoder, mode, original_voice, search_iter = 10):
+def synthesize_voice_list(text, voice_name, resemblyzer_encoder, mode, original_voice, search_iter = 10):
     fpath = Path(original_voice)
     wav = preprocess_wav(fpath)
     embeds_a = resemblyzer_encoder.embed_utterance(wav)
@@ -174,7 +177,7 @@ def synthesize_voice_find_best(text_translated, voice_name, resemblyzer_encoder,
     
     samples = []
     for i in range(search_iter):
-        audio_array = synthesize_voice(text_translated, voice_name, "simple")
+        audio_array = synthesize_voice(text, voice_name, mode)
         write_wav(f"temp/voice_synt_noise_{i}.wav", SAMPLE_RATE, audio_array)
         
         fpath = Path(f"temp/voice_synt_noise_{i}.wav")
@@ -183,14 +186,36 @@ def synthesize_voice_find_best(text_translated, voice_name, resemblyzer_encoder,
         np.set_printoptions(precision=3, suppress=True)
     
         sim = np.inner(embeds_a, embeds_b)
-        ### TODO: перевести сгенеренное аудио в текст и сравнить похожесть с оригинальным текстом text_translated, добавить как часть проверки. если фраза присутствует, то вырезать ненужное в начале и в конце
         samples.append((i, sim, f"temp/voice_synt_noise_{i}.wav"))
         print(i, sim)
-        if (sim > 0.9):
+        #if (sim > 0.9):
+        #    break
+    samples = sorted(samples, reverse=True, key=lambda item: item[1])
+    samples = list(filter(lambda item: item[1] > 0.75, samples))
+    print(samples)
+    return samples
+
+def compare_text(text_a, text_b):
+    print(text_a)
+    print(text_b)
+    print(f"Jaccard Similarity: {jaccard_similarity(text_a, text_b)}")
+    print(f"Euclidian Similarity: {euclidian_similarity(text_a, text_b)}")
+    print(f"Compression Similarity: {compression_similarity(text_a, text_b)}")
+    
+    return jaccard_similarity(text_a, text_b)
+
+def find_best_sample(original_text, text_samples, whisper_model):
+    best_speech_sample = None
+    for sample in text_samples:
+        text_transcribed = transcribe_audio(whisper_model, sample[2])
+        if (compare_text(original_text, text_transcribed) > 0.72): ### TODO: написать алгоритм сравнения получшее
+            best_speech_sample = sample
             break
-    sample = max(samples, key=lambda item: item[1])
-    print(sample)
-    best_speech_file = sample[2]
+    ### TODO: перевести сгенеренное аудио в текст, если фраза присутствует, то вырезать ненужное в начале и в конце
+    if (best_speech_sample != None):
+        best_speech_file = best_speech_sample[2]
+    else:
+        best_speech_file = text_samples[0][2]
     return best_speech_file
 
 def video_synchronization_setup():

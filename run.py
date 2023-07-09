@@ -25,6 +25,7 @@ if __name__ == "__main__":
     device = "cuda" # or "cpu"
 
     ### TODO: добавить аргумент verbose и выводить логи поэтапно
+    ### TODO: найти более подходящий отрывок голоса
     cmd = f"ffmpeg -y -i {args.input_file} temp/input_audio.wav"
     subprocess.run(cmd.split())
 
@@ -33,7 +34,7 @@ if __name__ == "__main__":
     ### если несколько человек, то по тембру выбрать голос каждого и склонировать каждого с отметкой его тембра для соответствующего синтеза
     ### по спектру смотреть присутствуют ли в аудио отрезке другие звуки, если есть только голосовые частоты, то брать для клонирования. проходиться окном по аудио и искать отрезок с голосом и минимумом посторонних звуков
     df_model, df_state = replica.voice_cleaning_setup()
-    replica.clean_audio(df_model, df_state, "temp/input_audio.wav", "temp/clean_audio.wav")
+    replica.clean_audio(df_model, df_state, "temp/input_audio.wav", "temp/clean_audio.wav") ### TODO: попробовать убрать чистку, возможно чистка удаляет нужную информацию для клонирования
 
     codec_model = replica.voice_clonning_setup_bark(device)
     tokenizer_file = replica.voice_clonning_download_hubert("eng")
@@ -51,12 +52,13 @@ if __name__ == "__main__":
     
     replica.voice_synthesis_setup()
     resemblyzer_encoder = replica.resemblyzer_setup()
-    best_speech_file = replica.synthesize_voice_find_best(text_translated, "temp/voice_clone.npz", resemblyzer_encoder, "simple", "temp/clean_audio.wav", 10)
+    speech_list = replica.synthesize_voice_list(text_translated, "temp/voice_clone.npz", resemblyzer_encoder, "simple", "temp/clean_audio.wav", 10)
+    
+    whisper_model = replica.transcribe_audio_setup("small")
+    best_speech_file = replica.find_best_sample(text_translated, speech_list, whisper_model)
+    del whisper_model
 
-    ### TODO: разобраться с этой файловой херью
-    noisy_audio, _ = load_audio(best_speech_file, sr=df_state.sr())
-    audio = enhance(df_model, df_state, noisy_audio)
-    save_audio("temp/voice_synt.wav", audio, df_state.sr())
+    replica.clean_audio(df_model, df_state, best_speech_file, "temp/voice_synt.wav")
 
     replica.video_synchronization_setup()
     replica.sync_video(args.input_file, "temp/voice_synt.wav", args.output_file)
