@@ -105,8 +105,10 @@ def clone_voice(device, hubert_model, tokenizer_model, codec_model, voice_to_clo
     np.savez(voice_fingerprint_file, fine_prompt=codes, coarse_prompt=codes[:2, :], semantic_prompt=semantic_tokens)
 
 def clone_voice_find_best(device, hubert_model, tokenizer_model, codec_model, input_file, resemblyzer_encoder, mode):
+    ### TODO: embed_utterance - работает с одним wav файлом, embed_speaker - с несколькими высказываниями одного спикера.
+    ### Можно взять ряд аудио файлов на вход для расчета эмбеддинга авторского голоса, и т ак же нагенерить 10 голосов для оценки похожести сгенеренных семплов на оригинал
     audio_duration = librosa.get_duration(filename=input_file)
-    text = "Hello my friend. This is the Replica test"
+    text = "Hello! I am currently in Europe on tour, look what beauty is behind me. But in general I am in Vienna now, it is very beautiful here"
     clone_scores = []
     for i in range(int(audio_duration // 10)):
         ### TODO: если конец аудио файла, то break
