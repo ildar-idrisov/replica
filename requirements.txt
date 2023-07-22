@@ -17,3 +17,5 @@ sacremoses
 fastBPE
 simphile
 statistics
+TTS
+pydub

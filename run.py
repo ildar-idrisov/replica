@@ -47,8 +47,9 @@ if __name__ == "__main__":
     #replica.clone_voice(device, hubert_model, tokenizer_model, codec_model, "temp/clean_audio.wav", "temp/voice_clone.npz")
     resemblyzer_encoder = replica.resemblyzer_setup()
     replica.voice_synthesis_setup()
-    voice_clone_file = replica.clone_voice_find_best(device, hubert_model, tokenizer_model, codec_model, "temp/clean_audio.wav", resemblyzer_encoder, "simple")
+    voice_clone_file = replica.clone_voice_find_best(device, hubert_model, tokenizer_model, codec_model, "temp/input_audio_wo_silence.wav", resemblyzer_encoder, "simple")
     del codec_model, hubert_model, tokenizer_model, resemblyzer_encoder
+    replica.clear_memory()
 
     # Synthesis
 
@@ -64,7 +65,7 @@ if __name__ == "__main__":
     text_translated = replica.translate_text(translate_model, text_transcribed)
     
     del whisper_model, translate_model
-    
+
     replica.voice_synthesis_setup()
     resemblyzer_encoder = replica.resemblyzer_setup()
     whisper_model = replica.transcribe_audio_setup("small.en")
@@ -72,7 +73,8 @@ if __name__ == "__main__":
     #best_speech_file = replica.find_best_sample(text_translated, speech_list, whisper_model)
     best_speech_file = replica.synthesize_voice_find_best(text_translated, voice_clone_file, resemblyzer_encoder, whisper_model, "simple", "temp/clean_audio.wav", 20)
     del whisper_model, resemblyzer_encoder
-
+    replica.clear_memory()
+    
     replica.clean_audio(df_model, df_state, best_speech_file, "temp/voice_synt.wav")
 
     replica.video_synchronization_setup()

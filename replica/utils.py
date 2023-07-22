@@ -8,6 +8,7 @@ import requests
 import subprocess
 import os
 import sys
+import gc
 #sys.path.insert(0, "Wav2Lip") ### TODO: move to Dockerfile
 sys.path.insert(0, "bark-with-voice-clone") ### TODO: move to Dockerfile"
 sys.path.insert(0, "ResemblyzerSlim") ### TODO: move to Dockerfile
@@ -19,6 +20,8 @@ from hubert.customtokenizer import CustomTokenizer
 from encodec.utils import convert_audio
 # voice synthesis
 from bark.api import generate_audio
+# voice conversion
+from TTS.api import TTS
 #from transformers import BertTokenizer
 from bark.generation import preload_models, codec_decode, generate_coarse, generate_fine, generate_text_semantic
 # voice cleaning
@@ -34,7 +37,7 @@ import statistics
 # wirking with audio
 import torchaudio
 import soundfile as sf
-import librosa
+import librosa ### заменить на pydub
 from scipy.io.wavfile import write as write_wav
 
 def voice_clonning_setup_bark(device):
@@ -112,7 +115,7 @@ def clone_voice_find_best(device, hubert_model, tokenizer_model, codec_model, in
     clone_scores = []
     for i in range(int(audio_duration // 10)):
         ### TODO: если конец аудио файла, то break
-        cmd = f"ffmpeg -y -i {input_file} -ss {i*10} -t {10} temp/input_audio_{i}.wav"
+        cmd = f"ffmpeg -y -i {input_file} -ss {i*10} -t 10 temp/input_audio_{i}.wav"
         subprocess.run(cmd.split())
         ### TODO: удалить паузы
         clone_voice(device, hubert_model, tokenizer_model, codec_model, f"temp/input_audio_{i}.wav", f"temp/voice_clone_{i}.npz")
@@ -294,6 +297,19 @@ def synthesize_voice_find_best(text, voice_name, resemblyzer_encoder, whisper_mo
     voice_synt_file = voice_synts[3]
     return voice_synt_file
 
+def voice_conversion_setup(language = "eng"):
+    #For these models use the following name format: `tts_models/<lang-iso_code>/fairseq/vits`.
+    #You can find the list of language ISO codes [here](https://dl.fbaipublicfiles.com/mms/tts/all-tts-languages.html) and learn about the Fairseq models [here](https://github.com/facebookresearch/fairseq/tree/main/examples/mms).
+    tts = TTS(f"tts_models/{language}/fairseq/vits")
+    return tts
+
+def voice_conversion(tts, text, speaker_voice, output_file):
+    tts.tts_with_vc_to_file(
+        text,
+        speaker_wav=speaker_voice,
+        file_path=output_file
+    )
+
 def video_synchronization_setup():
     url = "https://iiitaphyd-my.sharepoint.com/personal/radrabha_m_research_iiit_ac_in/_layouts/15/download.aspx?share=EdjI7bZlgApMqsVoEUUXpLsBxqXbn5z8VTmoxp55YNDcIA"
     response = requests.get(url)
@@ -327,3 +343,8 @@ def sync_video(input_video_file, input_audio_file, output_video_file):
     # Run the Wav2Lip model
     cmd = f"python3 wav2lip/inference.py --checkpoint_path {checkpoint_path} --face {input_video_file} --audio temp/voice_sync.wav --pads {pad_top} {pad_bottom} {pad_left} {pad_right} --resize_factor {rescaleFactor} {'--nosmooth' if nosmooth else ''} --outfile {output_video_file}"
     subprocess.run(cmd.split())
+
+def clear_memory():
+    ### TODO: добавить удаление всех неиспользуемых моделей
+    torch.cuda.empty_cache()
+    gc.collect()
