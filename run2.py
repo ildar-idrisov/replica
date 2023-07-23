@@ -43,42 +43,41 @@ if __name__ == "__main__":
     audio = AudioSegment.from_file(input_file)
     duration_in_s = len(audio) / 1000
 
-    DURATION_LIMIT = 50
-    START_POSITION = random.randint(0, int(duration_in_s - DURATION_LIMIT))
-    print("===== START_POSITION:", START_POSITION, "=====")
+    DURATION_LIMIT = 30
     if (duration_in_s > DURATION_LIMIT):
-        cmd = f"ffmpeg -y -i {input_file} -ss {START_POSITION} -t {DURATION_LIMIT} temp/input_cut.mp4"
-        subprocess.run(cmd.split())
-        input_file = "temp/input_cut.mp4"
-
-    cmd = f"ffmpeg -y -i {input_file} temp/input_video.mp4 temp/input_audio.wav"
-    subprocess.run(cmd.split())
-    
-    df_model, df_state = replica.voice_cleaning_setup()
-    replica.clean_audio(df_model, df_state, "temp/input_audio.wav", "temp/clean_audio.wav")
-    del df_model, df_state
-    replica.clear_memory()
-
-    audio = AudioSegment.from_file("temp/input_audio.wav")
-    if audio.channels == 2:
-        channels = audio.split_to_mono()
-        result = channels[1].overlay(channels[0].invert_phase())
-        result = result.set_channels(2)
+        START_POSITION = random.randint(0, int(duration_in_s - DURATION_LIMIT))
     else:
-        audio_clean = AudioSegment.from_file("temp/clean_audio.wav")
-        inverted_audio = audio_clean.invert_phase()
-        result = audio1.overlay(inverted_audio)
-    result.export("temp/bg_audio.wav", format='wav')
+        START_POSITION = 0
 
-    audio = AudioSegment.from_file("temp/clean_audio.wav")
+    cmd = f"ffmpeg -y -i {input_file} -ss {START_POSITION} -t {DURATION_LIMIT} temp/input_video.mp4 -ss {START_POSITION} -t {DURATION_LIMIT} temp/input_audio.wav"
+    subprocess.run(cmd.split())
+
+    replica.video_synchronization_setup() ### TODO: тут только скачивание моделей
+    
+    audio = AudioSegment.from_file("temp/input_audio.wav")
     duration_in_s = len(audio) / 1000
+    
     for i in range(int(duration_in_s // 10)):
-        cmd = f"ffmpeg -y -i temp/input_video.mp4 -ss {i*10} -t 10 temp/input_video_cut.wav"
+        cmd = f"ffmpeg -y -i temp/input_video.mp4 -ss {i*10} -t 10 temp/input_video_cut.mp4"
         subprocess.run(cmd.split())
-        cmd = f"ffmpeg -y -i temp/clean_audio.wav -ss {i*10} -t 10 temp/clean_audio_cut.wav"
+        cmd = f"ffmpeg -y -i temp/input_audio.wav -ss {i*10} -t 10 temp/input_audio_cut.wav"
         subprocess.run(cmd.split())
-        cmd = f"ffmpeg -y -i temp/bg_audio.wav -ss {i*10} -t 10 temp/bg_audio_cut.wav"
-        subprocess.run(cmd.split())
+        
+        df_model, df_state = replica.voice_cleaning_setup()
+        replica.clean_audio(df_model, df_state, "temp/input_audio_cut.wav", "temp/clean_audio_cut.wav")
+        del df_model, df_state
+        replica.clear_memory()
+    
+        audio = AudioSegment.from_file("temp/input_audio_cut.wav")
+        if audio.channels == 2:
+            channels = audio.split_to_mono()
+            result = channels[1].overlay(channels[0].invert_phase())
+            result = result.set_channels(2)
+        else:
+            audio_clean = AudioSegment.from_file("temp/clean_audio_cut.wav")
+            inverted_audio = audio_clean.invert_phase()
+            result = audio1.overlay(inverted_audio)
+        result.export("temp/bg_audio_cut.wav", format='wav')
         
         whisper_model = replica.transcribe_audio_setup("medium")
         text_transcribed = replica.transcribe_audio(whisper_model, "temp/clean_audio_cut.wav")
@@ -114,43 +113,22 @@ if __name__ == "__main__":
         combined_voice_bg = bg_audio.overlay(converted_voice)
         combined_voice_bg.export("temp/combined_voice_bg.wav", format='wav')
         
-        replica.video_synchronization_setup()
-        replica.sync_video("temp/input_video_cut.mp4", "temp/combined_voice_bg.wav", f"temp/output_video_{i:03n}.mp4")
-
-    video_files = sorted([f for f in os.listdir("temp") if f.startswith('output_video_') and f.endswith('.mp4')])
-    with open('temp/filelist.txt', 'w') as file:
-        for video_file in video_files:
+        video_file = f"output_video_{i:03n}.mp4"
+        replica.sync_video("temp/input_video_cut.mp4", "temp/combined_voice_bg.wav", f"temp/{video_file}")
+        ### TODO: Если нет лица, то пропускать кадр и брать следующий. А  потом достраивать лицо за пределы кадра и морфить, если оно есть, но видны только губы. Или просто пропускать кадр, если нет лица и губ
+        #Traceback (most recent call last):
+        #  File "/app/wav2lip/inference.py", line 280, in <module>
+        #    main()
+        #  File "/app/wav2lip/inference.py", line 249, in main
+        #    for i, (img_batch, mel_batch, frames, coords) in enumerate(tqdm(gen, 
+        #  File "/usr/local/lib/python3.10/site-packages/tqdm/std.py", line 1178, in __iter__
+        #    for obj in iterable:
+        #  File "/app/wav2lip/inference.py", line 113, in datagen
+        #    face_det_results = face_detect(frames) # BGR2RGB for CNN face detection
+        #  File "/app/wav2lip/inference.py", line 92, in face_detect
+        #    raise ValueError('Face not detected! Ensure the video contains a face in all the frames.')
+        with open('temp/filelist.txt', 'w') as file:
             file.write(f"file '{video_file}'\n")
     
     cmd = f"ffmpeg -y -f concat -safe 0 -i temp/filelist.txt {args.output_file}"
     subprocess.run(cmd.split())
-
-    #for i in range(int(audio_duration // 10)):
-    #    cmd = f"ffmpeg -y -i {input_file} -ss {i*10} -t 10 temp/input_video.mp4 -ss {i*10} -t 10 temp/input_audio.wav"
-    #    subprocess.run(cmd.split())
-    #    df_model, df_state = replica.voice_cleaning_setup()
-    #    replica.clean_audio(df_model, df_state, "temp/input_audio.wav", "temp/clean_audio.wav")
-    #    
-    #    whisper_model = replica.transcribe_audio_setup("medium")
-    #    text_transcribed = replica.transcribe_audio(whisper_model, "temp/clean_audio.wav")
-    #    
-    #    translate_model = replica.translate_text_setup(device, "ru-en")
-    #    text_translated = replica.translate_text(translate_model, text_transcribed)
-    #    
-    #    del whisper_model, translate_model
-    #    del df_model, df_state
-    #    replica.clear_memory()
-    #
-    #    # Alternative cloning. TTS - VITS, conversion - FreeVC
-    #    tts = replica.voice_conversion_setup("eng")
-    #    replica.voice_conversion(tts, text_translated, "temp/clean_audio.wav", "temp/converted_voice.wav")
-    #    del tts.synthesizer
-    #    del tts.voice_converter
-    #    del tts
-    #    replica.clear_memory()
-    #    
-    #    replica.video_synchronization_setup()
-    #    replica.sync_video("temp/input_video.mp4", "temp/converted_voice.wav", f"temp/output_video_{i:03n}.mp4")
-#
-    #cmd = f"ffmpeg -y -f concat -i temp/output_video_%03d.mp4 {args.output_file}"
-    #subprocess.run(cmd.split())
