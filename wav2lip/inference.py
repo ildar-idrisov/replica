@@ -89,12 +89,16 @@ def face_detect(images):
 	for rect, image in zip(predictions, images):
 		if rect is None:
 			cv2.imwrite('temp/faulty_frame.jpg', image) # check this frame where the face was not detected.
-			raise ValueError('Face not detected! Ensure the video contains a face in all the frames.')
-
-		y1 = max(0, rect[1] - pady1)
-		y2 = min(image.shape[0], rect[3] + pady2)
-		x1 = max(0, rect[0] - padx1)
-		x2 = min(image.shape[1], rect[2] + padx2)
+			#raise ValueError('Face not detected! Ensure the video contains a face in all the frames.')
+			y1 = 1
+			y2 = 2
+			x1 = 1
+			x2 = 2
+		else:
+			y1 = max(0, rect[1] - pady1)
+			y2 = min(image.shape[0], rect[3] + pady2)
+			x1 = max(0, rect[0] - padx1)
+			x2 = min(image.shape[1], rect[2] + padx2)
 		
 		results.append([x1, y1, x2, y2])
 
@@ -266,9 +270,9 @@ def main():
 		
 		for p, f, c in zip(pred, frames, coords):
 			y1, y2, x1, x2 = c
-			p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
-
-			f[y1:y2, x1:x2] = p
+			if (y1 != 1 or y2 != 2 or x1 != 1 or x2 != 2):
+				p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
+				f[y1:y2, x1:x2] = p
 			out.write(f)
 
 	out.release()

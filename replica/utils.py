@@ -311,6 +311,7 @@ def voice_conversion(tts, text, speaker_voice, output_file):
     )
 
 def video_synchronization_setup():
+    ### TODO: перенести в Dockerfile
     url = "https://iiitaphyd-my.sharepoint.com/personal/radrabha_m_research_iiit_ac_in/_layouts/15/download.aspx?share=EdjI7bZlgApMqsVoEUUXpLsBxqXbn5z8VTmoxp55YNDcIA"
     response = requests.get(url)
     
@@ -334,7 +335,7 @@ def sync_video(input_video_file, input_audio_file, output_video_file):
     pad_left = 0
     pad_right = 0
     rescaleFactor = 1
-    nosmooth = False
+    nosmooth = True ### TODO: не уверен, что нужно сглаживание, но оно выключено, чтоб не падал код при отсутствии лица
     
     # Set the path to the Wav2Lip model and input files
     checkpoint_path = "models/wav2lip_gan.pth"
