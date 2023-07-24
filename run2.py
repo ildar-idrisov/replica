@@ -8,6 +8,7 @@ import subprocess
 import os
 import glob
 import random
+import torch
 # voice clonning
 from replica import utils as replica
 ### TODO: убрать лишние зависимости
@@ -30,7 +31,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_file", type=str, default="temp/res.mp4")
     args = parser.parse_args()
     
-    device = "cuda" # "cuda" or "cpu"
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     ### TODO: добавить аргумент verbose и выводить логи поэтапно
     ### TODO: найти более подходящий отрывок голоса
@@ -114,7 +115,7 @@ if __name__ == "__main__":
         combined_voice_bg.export("temp/combined_voice_bg.wav", format='wav')
         
         video_file = f"output_video_{i:03n}.mp4"
-        replica.sync_video("temp/input_video_cut.mp4", "temp/combined_voice_bg.wav", f"temp/{video_file}")
+        replica.sync_video(device, "temp/input_video_cut.mp4", "temp/combined_voice_bg.wav", f"temp/{video_file}")
         ### TODO: Если нет лица, то пропускать кадр и брать следующий. А  потом достраивать лицо за пределы кадра и морфить, если оно есть, но видны только губы. Или просто пропускать кадр, если нет лица и губ
         #Traceback (most recent call last):
         #  File "/app/wav2lip/inference.py", line 280, in <module>
@@ -127,7 +128,7 @@ if __name__ == "__main__":
         #    face_det_results = face_detect(frames) # BGR2RGB for CNN face detection
         #  File "/app/wav2lip/inference.py", line 92, in face_detect
         #    raise ValueError('Face not detected! Ensure the video contains a face in all the frames.')
-        with open('temp/filelist.txt', 'w') as file:
+        with open('temp/filelist.txt', 'a') as file:
             file.write(f"file '{video_file}'\n")
     
     cmd = f"ffmpeg -y -f concat -safe 0 -i temp/filelist.txt {args.output_file}"

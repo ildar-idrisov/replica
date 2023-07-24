@@ -34,7 +34,8 @@ from pathlib import Path
 # text similaruity
 from simphile import jaccard_similarity, euclidian_similarity, compression_similarity
 import statistics
-# wirking with audio
+from replica import lipsync
+# working with audio
 import torchaudio
 import soundfile as sf
 import librosa ### заменить на pydub
@@ -327,7 +328,7 @@ def video_synchronization_setup():
     with open("models/face_detection/s3fd.pth", "wb") as f:
         f.write(response.content)
 
-def sync_video(input_video_file, input_audio_file, output_video_file):
+def sync_video(device, input_video_file, input_audio_file, output_video_file):
     audio, sr = librosa.load(input_audio_file, sr=None)      ### TODO: можно удалить
     sf.write("temp/voice_sync.wav", audio, sr, format="wav") ### TODO: можно удалить
     pad_top = 0
@@ -336,14 +337,9 @@ def sync_video(input_video_file, input_audio_file, output_video_file):
     pad_right = 0
     rescaleFactor = 1
     nosmooth = True ### TODO: не уверен, что нужно сглаживание, но оно выключено, чтоб не падал код при отсутствии лица
-    
-    # Set the path to the Wav2Lip model and input files
     checkpoint_path = "models/wav2lip_gan.pth"
-
-    ### TODO: переписать вызов через внутреннее API
-    # Run the Wav2Lip model
-    cmd = f"python3 wav2lip/inference.py --checkpoint_path {checkpoint_path} --face {input_video_file} --audio temp/voice_sync.wav --pads {pad_top} {pad_bottom} {pad_left} {pad_right} --resize_factor {rescaleFactor} {'--nosmooth' if nosmooth else ''} --outfile {output_video_file}"
-    subprocess.run(cmd.split())
+    
+    lipsync.inference(checkpoint_path, input_video_file, "temp/voice_sync.wav", rescaleFactor, nosmooth, output_video_file, device, (pad_top, pad_bottom, pad_left, pad_right))
 
 def clear_memory():
     ### TODO: добавить удаление всех неиспользуемых моделей
