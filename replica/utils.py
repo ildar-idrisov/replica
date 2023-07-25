@@ -169,6 +169,22 @@ def translate_text_setup(device, lang_pair = "ru-en"):
         translate_model.cuda()
     return translate_model
 
+### TODO: перевод с помощью chatgpt
+#def generate_response(transcript, language):
+#
+#    prompt = f"Translate {transcript} to {language}, don't say anything else except the translation,"
+#
+#    completion = openai.ChatCompletion.create(
+#    model="gpt-3.5-turbo",
+#    messages=[
+#            {"role": "system", "content": "You're a proffesional language translator"},
+#            {"role": "user", "content": prompt}
+#    ]
+#    )
+#    bot_first_response = completion.choices[0].message.content
+#
+#    return bot_first_response
+
 def translate_text(translate_model, text_input):
     text_output = translate_model.translate(text_input)
     return text_output
