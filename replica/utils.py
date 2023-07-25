@@ -329,17 +329,15 @@ def video_synchronization_setup():
         f.write(response.content)
 
 def sync_video(device, input_video_file, input_audio_file, output_video_file):
-    audio, sr = librosa.load(input_audio_file, sr=None)      ### TODO: можно удалить
-    sf.write("temp/voice_sync.wav", audio, sr, format="wav") ### TODO: можно удалить
     pad_top = 0
     pad_bottom = 10
     pad_left = 0
     pad_right = 0
     rescaleFactor = 1
-    nosmooth = True ### TODO: не уверен, что нужно сглаживание, но оно выключено, чтоб не падал код при отсутствии лица
+    nosmooth = False ### TODO: не уверен, что нужно сглаживание, но оно выключено, чтоб не падал код при отсутствии лица
     checkpoint_path = "models/wav2lip_gan.pth"
     
-    lipsync.inference(checkpoint_path, input_video_file, "temp/voice_sync.wav", rescaleFactor, nosmooth, output_video_file, device, (pad_top, pad_bottom, pad_left, pad_right))
+    lipsync.inference(checkpoint_path, input_video_file, input_audio_file, rescaleFactor, nosmooth, output_video_file, device, (pad_top, pad_bottom, pad_left, pad_right))
 
 def clear_memory():
     ### TODO: добавить удаление всех неиспользуемых моделей

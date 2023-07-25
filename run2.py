@@ -116,18 +116,7 @@ if __name__ == "__main__":
         
         video_file = f"output_video_{i:03n}.mp4"
         replica.sync_video(device, "temp/input_video_cut.mp4", "temp/combined_voice_bg.wav", f"temp/{video_file}")
-        ### TODO: Если нет лица, то пропускать кадр и брать следующий. А  потом достраивать лицо за пределы кадра и морфить, если оно есть, но видны только губы. Или просто пропускать кадр, если нет лица и губ
-        #Traceback (most recent call last):
-        #  File "/app/wav2lip/inference.py", line 280, in <module>
-        #    main()
-        #  File "/app/wav2lip/inference.py", line 249, in main
-        #    for i, (img_batch, mel_batch, frames, coords) in enumerate(tqdm(gen, 
-        #  File "/usr/local/lib/python3.10/site-packages/tqdm/std.py", line 1178, in __iter__
-        #    for obj in iterable:
-        #  File "/app/wav2lip/inference.py", line 113, in datagen
-        #    face_det_results = face_detect(frames) # BGR2RGB for CNN face detection
-        #  File "/app/wav2lip/inference.py", line 92, in face_detect
-        #    raise ValueError('Face not detected! Ensure the video contains a face in all the frames.')
+
         with open('temp/filelist.txt', 'a') as file:
             file.write(f"file '{video_file}'\n")
     

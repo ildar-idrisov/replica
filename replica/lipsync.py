@@ -14,13 +14,16 @@ IMG_SIZE = 96
 FACE_DET_BATCH_SIZE = 16
 WAV2LIP_BATCH_SIZE = 128
 CROP_TO_REGION = (0, -1, 0, -1) # Crop video to a smaller region (top, bottom, left, right). Applied after resize_factor
-                                # Useful if multiple face present. -1 implies the value will be auto-inferred based on height, width
+								# Useful if multiple face present. -1 implies the value will be auto-inferred based on height, width
 MEL_STEP_SIZE = 16
 
 def get_smoothened_boxes(boxes, T):
 	for i in range(len(boxes)):
 		if i + T > len(boxes):
-			window = boxes[len(boxes) - T:]
+			if T > len(boxes):
+				window = boxes[:]
+			else:
+				window = boxes[len(boxes) - T:]
 		else:
 			window = boxes[i : i + T]
 		boxes[i] = np.mean(window, axis=0)
@@ -49,23 +52,41 @@ def face_detect(images, nosmooth, pads, device):
 	pady1, pady2, padx1, padx2 = pads
 	for rect, image in zip(predictions, images):
 		if rect is None:
-			cv2.imwrite('temp/faulty_frame.jpg', image) # check this frame where the face was not detected.
-			#raise ValueError('Face not detected! Ensure the video contains a face in all the frames.')
-			y1 = 1
-			y2 = 2
-			x1 = 1
-			x2 = 2
+			cv2.imwrite('temp/faulty_frame.jpg', image) # check this frame where the face was not detected
+			y1 = 0
+			y2 = 0
+			x1 = 0
+			x2 = 0
 		else:
 			y1 = max(0, rect[1] - pady1)
 			y2 = min(image.shape[0], rect[3] + pady2)
 			x1 = max(0, rect[0] - padx1)
 			x2 = min(image.shape[1], rect[2] + padx2)
 		
-		results.append([x1, y1, x2, y2])
+		results.append([y1, y2, x1, x2])
 
 	boxes = np.array(results)
-	if not nosmooth: boxes = get_smoothened_boxes(boxes, T=5)
-	results = [[image[y1: y2, x1:x2], (y1, y2, x1, x2)] for image, (x1, y1, x2, y2) in zip(images, boxes)]
+	boxes_out = []
+	boxes_temp = []
+	for box in boxes:
+		y1, y2, x1, x2 = box
+		if (y1 == 0 and y2 == 0 and x1 == 0 and x2 == 0):
+			if (len(boxes_temp) > 0):
+				if not nosmooth:
+					boxes_temp = get_smoothened_boxes(boxes_temp, T=5)
+				boxes_out.extend(boxes_temp)
+				boxes_temp = []
+			boxes_out.append(box)
+		else:
+			boxes_temp.append(box)
+
+	if (len(boxes_temp) > 0):
+		if not nosmooth:
+			boxes_temp = get_smoothened_boxes(boxes_temp, T=5)
+		boxes_out.extend(boxes_temp)
+
+	boxes_out = np.around(boxes_out).astype(int)
+	results = [[image[y1:y2, x1:x2], (y1, y2, x1, x2)] for image, (y1, y2, x1, x2) in zip(images, boxes_out)]
 
 	del detector
 	return results 
@@ -79,6 +100,25 @@ def datagen(frames, mels, nosmooth, pads, device):
 		idx = i % len(frames)
 		frame_to_save = frames[idx].copy()
 		face, coords = face_det_results[idx].copy()
+
+		y1, y2, x1, x2 = coords
+		if (y1 == 0 and y2 == 0 and x1 == 0 and x2 == 0):
+			if len(img_batch) > 0:
+				img_batch, mel_batch = np.asarray(img_batch), np.asarray(mel_batch)
+
+				img_masked = img_batch.copy()
+				img_masked[:, IMG_SIZE//2:] = 0
+
+				img_batch = np.concatenate((img_masked, img_batch), axis=3) / 255.
+				mel_batch = np.reshape(mel_batch, [len(mel_batch), mel_batch.shape[1], mel_batch.shape[2], 1])
+
+				no_face = False
+				yield img_batch, mel_batch, frame_batch, coords_batch, no_face
+				img_batch, mel_batch, frame_batch, coords_batch = [], [], [], []
+
+			no_face = True
+			yield img_batch, mel_batch, frame_to_save, coords_batch, no_face
+			continue
 
 		face = cv2.resize(face, (IMG_SIZE, IMG_SIZE))
 			
@@ -96,7 +136,8 @@ def datagen(frames, mels, nosmooth, pads, device):
 			img_batch = np.concatenate((img_masked, img_batch), axis=3) / 255.
 			mel_batch = np.reshape(mel_batch, [len(mel_batch), mel_batch.shape[1], mel_batch.shape[2], 1])
 
-			yield img_batch, mel_batch, frame_batch, coords_batch
+			no_face = False
+			yield img_batch, mel_batch, frame_batch, coords_batch, no_face
 			img_batch, mel_batch, frame_batch, coords_batch = [], [], [], []
 
 	if len(img_batch) > 0:
@@ -108,7 +149,8 @@ def datagen(frames, mels, nosmooth, pads, device):
 		img_batch = np.concatenate((img_masked, img_batch), axis=3) / 255.
 		mel_batch = np.reshape(mel_batch, [len(mel_batch), mel_batch.shape[1], mel_batch.shape[2], 1])
 
-		yield img_batch, mel_batch, frame_batch, coords_batch
+		no_face = False
+		yield img_batch, mel_batch, frame_batch, coords_batch, no_face
 
 def _load(checkpoint_path, device):
 	if device == 'cuda':
@@ -191,7 +233,7 @@ def inference(checkpoint_path, video_file, audio_file, resize_factor, nosmooth, 
 	batch_size = WAV2LIP_BATCH_SIZE
 	gen = datagen(full_frames.copy(), mel_chunks, nosmooth, pads, device)
 
-	for i, (img_batch, mel_batch, frames, coords) in enumerate(tqdm(gen, 
+	for i, (img_batch, mel_batch, frames, coords, no_face) in enumerate(tqdm(gen, 
 											total=int(np.ceil(float(len(mel_chunks))/batch_size)))):
 		if i == 0:
 			model = load_model(checkpoint_path, device)
@@ -201,20 +243,22 @@ def inference(checkpoint_path, video_file, audio_file, resize_factor, nosmooth, 
 			out = cv2.VideoWriter('temp/result.avi', 
 									cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_w, frame_h))
 
-		img_batch = torch.FloatTensor(np.transpose(img_batch, (0, 3, 1, 2))).to(device)
-		mel_batch = torch.FloatTensor(np.transpose(mel_batch, (0, 3, 1, 2))).to(device)
+		if (no_face == True):
+			out.write(frames)
+		else:
+			img_batch = torch.FloatTensor(np.transpose(img_batch, (0, 3, 1, 2))).to(device)
+			mel_batch = torch.FloatTensor(np.transpose(mel_batch, (0, 3, 1, 2))).to(device)
 
-		with torch.no_grad():
-			pred = model(mel_batch, img_batch)
+			with torch.no_grad():
+				pred = model(mel_batch, img_batch)
 
-		pred = pred.cpu().numpy().transpose(0, 2, 3, 1) * 255.
+			pred = pred.cpu().numpy().transpose(0, 2, 3, 1) * 255.
 		
-		for p, f, c in zip(pred, frames, coords):
-			y1, y2, x1, x2 = c
-			if (y1 != 1 or y2 != 2 or x1 != 1 or x2 != 2):
+			for p, f, c in zip(pred, frames, coords):
+				y1, y2, x1, x2 = c
 				p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
 				f[y1:y2, x1:x2] = p
-			out.write(f)
+				out.write(f)
 
 	out.release()
 
