@@ -19,3 +19,4 @@ simphile
 statistics
 TTS
 pydub
+stable-ts
