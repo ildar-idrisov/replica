@@ -20,3 +20,5 @@ statistics
 TTS
 pydub
 stable-ts
+openai
+nltk

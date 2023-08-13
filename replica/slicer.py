@@ -2,34 +2,50 @@ import math
 import librosa
 import subprocess
 from stable_whisper import load_model, WhisperResult
+from .text import TextProcessor, languages_abbrev
 
 CHUNK_DURATION = 10
 
 class Slicer:
-    def __init__(self, model = "medium", chunk_dur = CHUNK_DURATION):
-        self.model = load_model(model)
-        self.chunk_dur = chunk_dur
+    def __init__(self, model = "medium"):
+        self.stw_model = load_model(model)
+        self.text_proc = TextProcessor()
 
-    def slice(self, video_file):
+    def slice(self, video_file, chunk_dur = CHUNK_DURATION, final_language="english"):
         audio_file = "temp/input_audio_full.wav"
         self.media_slicer(video_file, output_audio_file = audio_file)
 
-        self.transcribe(audio_file)
-        self.save_json("temp/input_audio_full.json")
+        transcript = self.transcribe(audio_file)
+        transcript_corrected = self.correct_original_text(transcript)
+        transcript_corrected_sentences = self.text_proc.split_into_sentences(transcript_corrected["text"], transcript_corrected["language"])
+
+        translated_text = self.text_proc.translate_text(transcript_corrected["text"], final_language)
+        translated_sentences = self.text_proc.split_into_sentences(translated_text, final_language)
+
+        self.matches = []
+        start = 0
+        for sent_pair in zip(transcript_corrected_sentences, translated_sentences):
+            end = start + len(sent_pair[0].split()) - 1
+            start_of_sentence = transcript_corrected["words"][start]["start"]
+            end_of_sentence = transcript_corrected["words"][end]["end"]
+
+            self.matches.append({"original_text" : sent_pair[0], "text" : sent_pair[1], "start" : start_of_sentence, "end" : end_of_sentence})
+            start = end + 1
 
         res = []
         start = 0
         audio_duration = int(librosa.get_duration(path=audio_file))
         while start < audio_duration:
-            chunk = self.get_chunk_by_time(start, self.chunk_dur)
+            chunk = self.get_chunk_by_time(start, chunk_dur)
+            print(chunk)
             if chunk:
                 text_presents = True
-                end = math.ceil(chunk[-1]["end"])
+                end = chunk[-1]["end"]
             else:
                 text_presents = False
                 chunk = self.get_next_single_chunk(start)
                 if chunk:
-                    end = math.floor(chunk["start"])
+                    end = min(chunk["start"], start + chunk_dur)
                 else:
                     end = audio_duration
 
@@ -49,44 +65,44 @@ class Slicer:
         return res
 
     def transcribe(self, audio_file):
-        self.transcript = self.model.transcribe(audio_file)
-        self.matches = self.transcript.find(r'[^.]+\.')
+        transcript = self.stw_model.transcribe(audio_file)
+        return transcript
 
-    def get_chunk_by_sentances(self, start = 0, sents = None):
-        result = []
-        matches_len = len(self.matches)
-        if (sents == None):
-            end = matches_len
-        elif (sents > matches_len - start):
-            sents = matches_len
-            end = start + sents
-        else:
-            end = start + sents
+    def correct_original_text(self, transcript):
+        transcript_dict = transcript.to_dict()
+        text_corr = self.text_proc.add_punctuation(transcript_dict["text"])
+        text = transcript_dict["text"].split()
+        text_corr_splitted = text_corr.split()
+        assert(len(text) == len(text_corr_splitted))
 
-        for match in self.matches[start:end]:
-            result.append({"text" : match.text_match,
-                          "start" : match.start,
-                          "end" : match.end})
-        return result
+        words_lst = []
+        for seg in transcript_dict["segments"]:
+            for wseg in seg["words"]:
+                assert (wseg["word"].strip() == text[len(words_lst)])
+                words_lst.append({"word" : text_corr_splitted[len(words_lst)], "start" : wseg["start"], "end" : wseg["end"]})
+
+        lang = languages_abbrev[transcript_dict["language"]]
+        result_dict = {"text" : text_corr, "language" : lang, "words" : words_lst}
+        return result_dict
 
     def get_chunk_by_time(self, start = 0, duration = CHUNK_DURATION):
         result = []
         for match in self.matches:
-            if (match.start >= start and match.end <= start + duration):
-                result.append({"text" : match.text_match,
-                              "start" : match.start,
-                              "end" : match.end})
-            elif (match.end > start + duration):
+            if (match["start"] >= start and match["end"] <= start + duration):
+                result.append({"text" : match["text"],
+                              "start" : match["start"],
+                              "end" : match["end"]})
+            elif (match["end"] > start + duration):
                 break
         return result
 
     def get_next_single_chunk(self, start = 0):
         result = None
         for match in self.matches:
-            if (match.start >= start):
-                result = {"text" : match.text_match,
-                          "start" : match.start,
-                          "end" : match.end}
+            if (match["start"] >= start):
+                result = {"text" : match["text"],
+                          "start" : match["start"],
+                          "end" : match["end"]}
                 break
         return result
 
@@ -107,10 +123,3 @@ class Slicer:
             
         assert (output_video_file != None or output_audio_file != None)
         subprocess.run(cmd.split())
-
-    def save_json(self, json_file):
-        self.transcript.save_as_json(json_file)
-
-    def load_json(self, json_file):
-        self.transcript = WhisperResult(json_file)
-        self.matches = self.transcript.find(r'[^.]+\.')
