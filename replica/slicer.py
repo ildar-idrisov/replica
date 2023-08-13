@@ -11,7 +11,7 @@ class Slicer:
         self.stw_model = load_model(model)
         self.text_proc = TextProcessor()
 
-    def slice(self, video_file, chunk_dur = CHUNK_DURATION, final_language="english"):
+    def slice(self, video_file, chunk_dur = CHUNK_DURATION, output_language="english"):
         audio_file = "temp/input_audio_full.wav"
         self.media_slicer(video_file, output_audio_file = audio_file)
 
@@ -19,8 +19,8 @@ class Slicer:
         transcript_corrected = self.correct_original_text(transcript)
         transcript_corrected_sentences = self.text_proc.split_into_sentences(transcript_corrected["text"], transcript_corrected["language"])
 
-        translated_text = self.text_proc.translate_text(transcript_corrected["text"], final_language)
-        translated_sentences = self.text_proc.split_into_sentences(translated_text, final_language)
+        translated_text = self.text_proc.translate_text(transcript_corrected["text"], output_language)
+        translated_sentences = self.text_proc.split_into_sentences(translated_text, output_language)
 
         self.matches = []
         start = 0
@@ -37,7 +37,6 @@ class Slicer:
         audio_duration = int(librosa.get_duration(path=audio_file))
         while start < audio_duration:
             chunk = self.get_chunk_by_time(start, chunk_dur)
-            print(chunk)
             if chunk:
                 text_presents = True
                 end = chunk[-1]["end"]
