@@ -1,4 +1,5 @@
 import math
+import string
 import librosa
 import subprocess
 from stable_whisper import load_model, WhisperResult
@@ -70,15 +71,37 @@ class Slicer:
     def correct_original_text(self, transcript):
         transcript_dict = transcript.to_dict()
         text_corr = self.text_proc.add_punctuation(transcript_dict["text"])
-        text = transcript_dict["text"].split()
         text_corr_splitted = text_corr.split()
-        assert(len(text) == len(text_corr_splitted))
-
+### TODO: !!! ходить по text_corr_splitted и искать соответствующие таймстемпы, забирать их в новый список
+### TODO: отдать в ChatGPT список кортежей, где каждый кортеж (слово, start, end) от whisper, а также исправленное предложение. Попросить сопоставить слова и заменить в списке все слова с пунктуацией
+### TODO: пройтись по списку и заменять только те слова, в которых было сделано изменение
         words_lst = []
+        temp_word = ""
         for seg in transcript_dict["segments"]:
             for wseg in seg["words"]:
-                assert (wseg["word"].strip() == text[len(words_lst)])
-                words_lst.append({"word" : text_corr_splitted[len(words_lst)], "start" : wseg["start"], "end" : wseg["end"]})
+                word = wseg["word"].strip()
+                word = word.translate(str.maketrans("", "", string.punctuation)).lower()
+                word_corr = text_corr_splitted[len(words_lst)].strip()
+                word_corr = word_corr.translate(str.maketrans("", "", string.punctuation)).lower()
+                if (word == word_corr):
+                    words_lst.append({"word" : text_corr_splitted[len(words_lst)], "start" : wseg["start"], "end" : wseg["end"]})
+                    temp_word = ""
+                else:
+                    print(word, word_corr)
+                    pos = word_corr.find(word)
+                    if (pos == 0):
+                        start = wseg["start"]
+                        temp_word = word
+                    elif (pos > 0):
+                        end = wseg["end"]
+                        temp_word += word
+                        if (temp_word == word_corr):
+                            words_lst.append({"word" : text_corr_splitted[len(words_lst)], "start" : start, "end" : end})
+                            temp_word = ""
+                        else:
+                            assert("Something goes wrong" == False)
+                    else:
+                        assert("Something goes wrong" == False)
 
         lang = languages_abbrev[transcript_dict["language"]]
         result_dict = {"text" : text_corr, "language" : lang, "words" : words_lst}

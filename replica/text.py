@@ -23,12 +23,14 @@ class TextProcessor:
     def add_punctuation(self, transcript):
         ### TODO: отдавать в openai текст по частям, так чтобы сохранялась целостность текста
         prompt = f"Place punctuation marks in the text: {transcript}. Save original text language and words order. Don't say anything else except the result text.  Write the result only, without additional information."
-    
+        #prompt = f"Place punctuation marks in the text: {transcript}. Save original text language and words order. Write the answer in the form of a python list of tuples, where each tuple will contain the word before the correction and the word after the correction with punctuation marks. Don't say anything else except the result list.  Write the result only, without additional information."
+
         completion = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
-                    {"role": "system", "content": "You're a professional text editor"},
-                    {"role": "user", "content": prompt}
+                {"role": "system", "content": "You're a professional text editor"},
+                #{"role": "system", "content": "You're a professional text editor who knows Python. Write python list only"},
+                {"role": "user", "content": prompt}
             ],
             temperature=0,
             max_tokens=256
